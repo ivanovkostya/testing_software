@@ -9,19 +9,13 @@ from selenium.webdriver.support import expected_conditions as EC
 
 class TestBankTransfer:
 
-    def setup_method(self, driver, base_url):
-        """Общий метод открытия формы Рубли"""
-        wait = WebDriverWait(driver, 10)
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]"))).click()
-        wait.until(EC.presence_of_element_located((By.XPATH, "//h2[contains(text(), 'Перевод')]")))
-        wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='1000']")))
-
     # ========== ТК-01 ==========
     def test_01_balance_display(self, driver, base_url):
         driver.get(base_url + "/?balance=30000&reserved=20000")
         wait = WebDriverWait(driver, 10)
         
         wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]"))).click()
+        wait.until(EC.presence_of_element_located((By.XPATH, "//h2[contains(text(), 'Перевод')]")))
         
         balance = wait.until(EC.presence_of_element_located((By.ID, "rub-sum"))).text
         reserved = driver.find_element(By.ID, "rub-reserved").text
