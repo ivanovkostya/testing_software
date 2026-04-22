@@ -1,3 +1,7 @@
+"""
+Автоматизированные тесты для F-Bank
+11 тест-кейсов, из которых 5 падают из-за дефектов
+"""
 import time
 import pytest
 from selenium.webdriver.common.by import By
@@ -6,6 +10,18 @@ from selenium.webdriver.support import expected_conditions as EC
 
 
 class TestBankTransfer:
+
+    # ==================== ОБЩИЙ ХЕЛПЕР ====================
+    def get_amount_input(self, driver, wait):
+        """Поиск поля ввода суммы"""
+        try:
+            amount = wait.until(
+                EC.presence_of_element_located((By.XPATH, "//input[@placeholder='1000']"))
+            )
+            return amount
+        except:
+            inputs = driver.find_elements(By.TAG_NAME, "input")
+            return inputs[1] if len(inputs) > 1 else None
 
     # ==================== ТК-01 ====================
     def test_01_balance_display(self, driver, base_url):
@@ -18,8 +34,8 @@ class TestBankTransfer:
         rub = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]")))
         rub.click()
 
-        balance = driver.find_element(By.ID, "rub-sum").text
-        reserved = driver.find_element(By.ID, "rub-reserved").text
+        balance = wait.until(EC.presence_of_element_located((By.ID, "rub-sum"))).text
+        reserved = wait.until(EC.presence_of_element_located((By.ID, "rub-reserved"))).text
 
         assert "30000" in balance or "30'000" in balance
         assert "20000" in reserved or "20'000" in reserved
@@ -35,7 +51,9 @@ class TestBankTransfer:
         rub = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]")))
         rub.click()
 
-        form = driver.find_element(By.XPATH, "//h2[contains(text(), 'Перевод')]")
+        form = wait.until(
+            EC.presence_of_element_located((By.XPATH, "//h2[contains(text(), 'Перевод')]"))
+        )
         assert form.is_displayed()
 
     # ==================== ТК-03 ====================
@@ -46,10 +64,11 @@ class TestBankTransfer:
         driver.get(base_url)
         wait = WebDriverWait(driver, 10)
 
-        rub = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]")))
-        rub.click()
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]"))).click()
 
-        card_input = driver.find_element(By.XPATH, "//input[@placeholder='0000 0000 0000 0000']")
+        card_input = wait.until(
+            EC.presence_of_element_located((By.XPATH, "//input[contains(@placeholder, '0000')]"))
+        )
         card_input.send_keys("1234567890123456")
 
         value = card_input.get_attribute("value")
@@ -59,21 +78,21 @@ class TestBankTransfer:
     def test_04_positive_transfer(self, driver, base_url):
         """
         ТК-04: Перевод с положительной суммой
+        ❌ ПАДАЕТ ИЗ-ЗА БАГ-002: Ошибка расчёта комиссии
         """
         driver.get(base_url + "/?balance=110&reserved=0")
         wait = WebDriverWait(driver, 10)
 
-        rub = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]")))
-        rub.click()
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]"))).click()
 
-        amount = driver.find_element(By.XPATH, "//input[@placeholder='1000']")
+        wait.until(EC.presence_of_element_located((By.XPATH, "//h2[contains(text(), 'Перевод')]")))
+
+        amount = self.get_amount_input(driver, wait)
+        assert amount is not None, "Поле ввода суммы не найдено"
         amount.send_keys("100")
 
         btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Перевести')]")
-        
-        # Ожидание: кнопка активна (баланс 110, сумма 100 + комиссия 10 = 110)
-        # Факт: кнопка неактивна
-        assert btn.is_enabled(), "БАГ-002: Кнопка неактивна при балансе 110 и сумме 100"
+        assert btn.is_enabled()
 
     # ==================== ТК-05 ====================
     def test_05_insufficient_funds(self, driver, base_url):
@@ -83,16 +102,20 @@ class TestBankTransfer:
         driver.get(base_url + "/?balance=100&reserved=0")
         wait = WebDriverWait(driver, 10)
 
-        rub = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]")))
-        rub.click()
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]"))).click()
 
-        amount = driver.find_element(By.XPATH, "//input[@placeholder='1000']")
+        wait.until(EC.presence_of_element_located((By.XPATH, "//h2[contains(text(), 'Перевод')]")))
+
+        amount = self.get_amount_input(driver, wait)
+        assert amount is not None, "Поле ввода суммы не найдено"
         amount.send_keys("150")
 
         btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Перевести')]")
         assert not btn.is_enabled()
 
-        error = driver.find_element(By.XPATH, "//*[contains(text(), 'Недостаточно')]")
+        error = wait.until(
+            EC.presence_of_element_located((By.XPATH, "//*[contains(text(), 'Недостаточно')]"))
+        )
         assert error.is_displayed()
 
     # ==================== ТК-06 ====================
@@ -103,86 +126,77 @@ class TestBankTransfer:
         driver.get(base_url)
         wait = WebDriverWait(driver, 10)
 
-        driver.find_element(By.XPATH, "//*[contains(text(), 'Рубли')]").click()
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]"))).click()
         driver.find_element(By.XPATH, "//*[contains(text(), 'Доллары')]").click()
         driver.find_element(By.XPATH, "//*[contains(text(), 'Евро')]").click()
 
-        assert driver.find_element(By.ID, "euro-sum").is_displayed()
+        time.sleep(1)
+        eur_balance = driver.find_element(By.ID, "euro-sum")
+        assert eur_balance.is_displayed()
 
     # ==================== ТК-07 ====================
     def test_07_reserved_more_than_balance(self, driver, base_url):
         """
         ТК-07: Резерв превышает баланс
+        ❌ ПАДАЕТ ИЗ-ЗА БАГ-003: Отображается отрицательный остаток
         """
         driver.get(base_url + "/?balance=10000&reserved=15000")
         wait = WebDriverWait(driver, 10)
 
-        rub = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]")))
-        rub.click()
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]"))).click()
 
         page_text = driver.find_element(By.TAG_NAME, "body").text
-        
-        # Ожидание: нет отрицательного доступного остатка
-        # Факт: отображается отрицательное число
-        assert "-" not in page_text or "На счету: 0" in page_text, \
-            "БАГ-003: Отображается отрицательный доступный остаток"
+        assert "-" not in page_text or "На счету: 0" in page_text
 
     # ==================== ТК-08 ====================
     def test_08_negative_balance_url(self, driver, base_url):
         """
         ТК-08: Отрицательный баланс в URL
+        ❌ ПАДАЕТ ИЗ-ЗА БАГ-004: Баланс может быть отрицательным
         """
         driver.get(base_url + "/?balance=-100&reserved=50")
         wait = WebDriverWait(driver, 10)
 
-        title = driver.find_element(By.TAG_NAME, "h1").text
-        assert "F-Bank" in title
+        assert "F-Bank" in driver.find_element(By.TAG_NAME, "h1").text
 
-        rub = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]")))
-        rub.click()
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]"))).click()
 
         balance = driver.find_element(By.ID, "rub-sum").text
-        
-        # Ожидание: баланс не отрицательный
-        # Факт: отображается -100
-        assert "-" not in balance, "БАГ-004: Баланс не должен быть отрицательным"
+        assert "-" not in balance
 
     # ==================== ТК-09 ====================
     def test_09_non_numeric_url(self, driver, base_url):
         """
         ТК-09: Нечисловые значения в URL
+        ❌ ПАДАЕТ ИЗ-ЗА БАГ-005: Отображается NaN
         """
         driver.get(base_url + "/?balance=abc&reserved=xyz")
         wait = WebDriverWait(driver, 10)
 
-        rub = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]")))
-        rub.click()
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]"))).click()
 
         page_text = driver.find_element(By.TAG_NAME, "body").text
-        
-        # Ожидание: нет NaN
-        # Факт: отображается NaN
-        assert "NaN" not in page_text, "БАГ-005: В интерфейсе отображается NaN"
+        assert "NaN" not in page_text
 
-    # ==================== ТК-10 =====================
+    # ==================== ТК-10 ====================
     def test_10_negative_amount_input(self, driver, base_url):
         """
         ТК-10: Ввод отрицательной суммы перевода
+        ❌ ПАДАЕТ ИЗ-ЗА БАГ-001: Отрицательная сумма принимается
         """
         driver.get(base_url + "/?balance=1000&reserved=0")
         wait = WebDriverWait(driver, 10)
 
-        rub = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]")))
-        rub.click()
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]"))).click()
 
-        amount = driver.find_element(By.XPATH, "//input[@placeholder='1000']")
+        wait.until(EC.presence_of_element_located((By.XPATH, "//h2[contains(text(), 'Перевод')]")))
+
+        amount = self.get_amount_input(driver, wait)
+        assert amount is not None, "Поле ввода суммы не найдено"
         amount.send_keys("-500")
 
         btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Перевести')]")
-        
-        # Ожидание: кнопка неактивна
-        # Факт: кнопка активна
-        assert not btn.is_enabled(), "БАГ-001: Кнопка активна при отрицательной сумме"
+        assert not btn.is_enabled()
 
     # ==================== ТК-11 ====================
     def test_11_zero_values(self, driver, base_url):
@@ -192,8 +206,7 @@ class TestBankTransfer:
         driver.get(base_url + "/?balance=0&reserved=0")
         wait = WebDriverWait(driver, 10)
 
-        rub = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]")))
-        rub.click()
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Рубли')]"))).click()
 
         balance = driver.find_element(By.ID, "rub-sum").text
         reserved = driver.find_element(By.ID, "rub-reserved").text
