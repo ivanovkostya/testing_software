@@ -1,0 +1,40 @@
+name: Run Selenium Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+
+    - name: Install Chrome
+      uses: browser-actions/setup-chrome@v1
+
+    - name: Start application server
+      run: |
+        python3 -m http.server 8000 &
+        sleep 3
+
+    - name: Debug files
+      run: |
+        pwd
+        ls -R
+        
+    - name: Run tests
+      run: |
+        pytest tests/ -v
